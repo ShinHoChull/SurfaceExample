@@ -2,6 +2,7 @@ package com.example.surfaceexample
 
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
+
 import java.nio.ByteBuffer
 
 /** Helper type alias used for analysis use case callbacks */
@@ -11,6 +12,7 @@ class LuminosityAnalyzer (private val listener : LumaListener) : ImageAnalysis.A
 
 
     private fun ByteBuffer.toByteArray() : ByteArray {
+
         rewind()    // Rewind the buffer to zero
         val data = ByteArray(remaining())
         get(data)   // Copy the buffer into a byte array

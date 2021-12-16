@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "434107607098",
+    "project_id": "camera-prototype",
+    "storage_bucket": "camera-prototype.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:434107607098:android:9768b6031727fd93602d03",
+        "android_client_info": {
+          "package_name": "com.example.surfaceexample"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "434107607098-aimcoi42pd1j4hrkbhcturbl6j4rsh8g.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.surfaceexample",
+            "certificate_hash": "a2becfae3f96efaefcc5222e8af47318165a983f"
+          }
+        },
+        {
+          "client_id": "434107607098-4o7j30ir9hj01dqmc9lkr115brsgviep.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAH2Cwz9tjlXMkIxmohHcvdhC4Y-giTGkA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "434107607098-4o7j30ir9hj01dqmc9lkr115brsgviep.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

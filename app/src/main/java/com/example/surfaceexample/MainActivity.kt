@@ -3,30 +3,40 @@ package com.example.surfaceexample
 import android.Manifest
 import android.content.ContentValues
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
 import android.widget.Toast
+import androidx.annotation.RequiresApi
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import com.example.surfaceexample.databinding.ActivityMainBinding
-import java.io.ByteArrayOutputStream
-import java.io.File
-import java.io.FileOutputStream
-import java.io.InputStream
+import com.google.android.gms.tasks.Task
+import com.google.firebase.functions.FirebaseFunctions
+import com.google.firebase.ktx.Firebase
+import com.google.firebase.ktx.app
+import com.google.firebase.ktx.options
+import com.google.gson.*
+import java.io.*
 import java.lang.Exception
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import android.R
+
+import android.graphics.BitmapFactory
+
+
+
 
 class MainActivity : AppCompatActivity() {
 
@@ -35,6 +45,12 @@ class MainActivity : AppCompatActivity() {
     private var imageCapture : ImageCapture? = null
     private lateinit var outputDirectory : File
     private lateinit var cameraExecutor : ExecutorService
+
+    private var mBitMap : Bitmap? = null
+
+    private lateinit var functions: FirebaseFunctions
+
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,10 +67,10 @@ class MainActivity : AppCompatActivity() {
 
         // Set up the listener for take photo button
         mBinding.cameraCaptureButton.setOnClickListener { takePhoto() }
-
         outputDirectory = getOutputDirectory()
-
         cameraExecutor = Executors.newSingleThreadExecutor()
+
+        functions = FirebaseFunctions.getInstance()
 
     }
 
@@ -83,9 +99,63 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                    val savedUri = Uri.fromFile(photoFile)
 
+                    val savedUri = Uri.fromFile(photoFile)
                     saveImage(savedUri)
+
+                    try {
+                        mBitMap = BitmapFactory.decodeResource(
+                            resources,
+                            R.drawable.alert_dark_frame
+                        )
+                        //mBitMap = MediaStore.Images.Media.getBitmap(contentResolver , savedUri)
+                        if (mBitMap != null) {
+                            mBitMap = Utils.scaleBitmapDown(mBitMap!!, 640)
+
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+
+                                val request = JsonObject()
+                                val image = JsonObject()
+                                image.add("content", JsonPrimitive(bitMapToBase64(mBitMap!!)))
+                                request.add("image", image)
+                                //Add features to the request
+                                val feature = JsonObject()
+                                feature.add("type", JsonPrimitive("TEXT_DETECTION"))
+                                // Alternatively, for DOCUMENT_TEXT_DETECTION:
+                                // feature.add("type", JsonPrimitive("DOCUMENT_TEXT_DETECTION"))
+                                val features = JsonArray()
+                                features.add(feature)
+                                request.add("features", features)
+
+                                val imageContext = JsonObject()
+                                val languageHints = JsonArray()
+                                languageHints.add("kr")
+                                imageContext.add("languageHints", languageHints)
+                                request.add("imageContext", imageContext)
+
+
+                                annotateImage(request.toString())
+                                    .addOnCompleteListener { task ->
+                                        if (!task.isSuccessful) {
+                                            // Task failed with an exception
+                                            // ...
+                                            Log.e(TAG , "failed!!!!->${
+                                                task.exception?.message} / ${task.exception?.localizedMessage} ")
+                                        } else {
+                                            // Task completed successfully
+                                            // ...
+                                            val annotation = task.result!!.asJsonArray[0]
+                                                .asJsonObject["fullTextAnnotation"].asJsonObject
+
+                                            System.out.format("%nComplete annotation:")
+                                            System.out.format("%n%s", annotation["text"].asString)
+                                        }
+                                    }
+                            }
+                        }
+                    } catch (iEcp: IOException) {
+                        Log.d(TAG, "bitMap Error ~ ${iEcp.message}")
+                    }
 
                     val msg = "Photo capture succeeded: $savedUri"
                     Toast.makeText(baseContext, msg, Toast.LENGTH_SHORT).show()
@@ -94,15 +164,37 @@ class MainActivity : AppCompatActivity() {
             })
     }
 
+    private fun annotateImage(requestJson: String): Task<JsonElement> {
+        return functions
+            .getHttpsCallable("annotateImage")
+            .call(requestJson)
+            .continueWith { task ->
+                // This continuation runs on either success or failure, but if the task
+                // has failed then result will throw an Exception which will be
+                // propagated down.
+                val result = task.result?.data
+                JsonParser.parseString(Gson().toJson(result))
+            }
+    }
+
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun bitMapToBase64(bitmap : Bitmap) : String{
+        val byteArrayOutputStream = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 100, byteArrayOutputStream)
+        val imageBytes: ByteArray = byteArrayOutputStream.toByteArray()
+        return Base64.getEncoder().encodeToString(imageBytes)
+    }
+
     private fun saveImage( imageUri : Uri ) {
 
         val values = ContentValues()
-        val fileName = "${System.currentTimeMillis()}_temp.png";
+        val fileName = "${System.currentTimeMillis()}_temp.png"
         values.put(MediaStore.Images.Media.DISPLAY_NAME , fileName)
         values.put(MediaStore.Images.Media.MIME_TYPE , "image/*")
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            values.put(MediaStore.Images.Media.IS_PENDING, 1);
+            values.put(MediaStore.Images.Media.IS_PENDING, 1)
         }
 
         val contentResolver = contentResolver
@@ -116,7 +208,7 @@ class MainActivity : AppCompatActivity() {
                 Log.d("syc","null")
             } else {
 
-                val inputData = getBytes(imageUri)
+                val inputData = Utils.getBytes(imageUri , contentResolver)
                 val fos = FileOutputStream(pdf.fileDescriptor)
                 fos.write(inputData)
                 fos.close()
@@ -136,24 +228,7 @@ class MainActivity : AppCompatActivity() {
         val file = File(fileName)
         MediaScannerConnection.scanFile(applicationContext,
             arrayOf(file.toString()),
-            null, null);
-
-    }
-
-    private fun getBytes(imageUri : Uri) : ByteArray {
-        val stream : InputStream? = contentResolver.openInputStream(imageUri)
-        val byteBuffer = ByteArrayOutputStream()
-        val bufferSize = 1024
-        val buffer  = ByteArray(bufferSize)
-
-        var len = 0
-        //inputStream 에서 읽어올게 없을 때까지 바이트 배열에 전송.
-        if (stream != null) {
-            while ( {len = stream.read(buffer); len}() != -1) {
-                byteBuffer.write(buffer , 0 , len)
-            }
-        }
-        return byteBuffer.toByteArray()
+            null, null)
     }
 
 
@@ -172,8 +247,10 @@ class MainActivity : AppCompatActivity() {
                     it.setSurfaceProvider(mBinding.viewFinder.surfaceProvider)
                 }
 
+
             imageCapture = ImageCapture.Builder()
                 .build()
+
 
 //            val imageAnalyzer = ImageAnalysis.Builder()
 //                .build()
@@ -197,6 +274,7 @@ class MainActivity : AppCompatActivity() {
                     , preview
                     ,imageCapture
                 )
+
             } catch (exc : Exception) {
                 Log.e("MainActivity1","Use case binding failed" , exc)
             }
@@ -212,7 +290,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun getOutputDirectory(): File {
         val mediaDir = externalMediaDirs.firstOrNull()?.let {
-            File(it, resources.getString(R.string.app_name)).apply { mkdirs() } }
+            File(it, "").apply { mkdirs() } }
+
         return if (mediaDir != null && mediaDir.exists())
             mediaDir else filesDir
     }
@@ -240,6 +319,9 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+
+
+
 
 
     companion object {

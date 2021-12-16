@@ -1,6 +1,7 @@
 plugins {
     id 'com.android.application'
     id 'kotlin-android'
+    id 'com.google.gms.google-services'
 }
 
 android {
@@ -55,6 +56,18 @@ dependencies {
 
     //TedPermission
     implementation 'gun0912.ted:tedpermission:2.2.2'
+
+    // Import the Firebase BoM
+    implementation platform('com.google.firebase:firebase-bom:29.0.2')
+
+    // When using the BoM, you don't specify versions in Firebase library dependencies
+
+    // Declare the dependency for the Firebase SDK for Google Analytics
+    implementation 'com.google.firebase:firebase-analytics-ktx'
+
+    //텍스트 인식
+    implementation 'com.google.firebase:firebase-functions:20.0.1'
+    implementation 'com.google.code.gson:gson:2.8.6'
 
 
     testImplementation 'junit:junit:4.+'
